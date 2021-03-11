@@ -491,12 +491,16 @@ impl FileMode {
             } else {
                 (false, false)
             };
-            if input.len() != 3 {
+            if input.len() > 3 {
                 return None;
             }
-            let owner = from_oct_ch(input[0])?;
-            let group = from_oct_ch(input[1])?;
-            let other = from_oct_ch(input[2])?;
+
+            let mut full_mode = [b'0'; 3];
+            full_mode[3-input.len()..].copy_from_slice(input);
+
+            let owner = from_oct_ch(full_mode[0])?;
+            let group = from_oct_ch(full_mode[1])?;
+            let other = from_oct_ch(full_mode[2])?;
             Some(FileMode {
                 setuid,
                 setgid,
@@ -507,11 +511,33 @@ impl FileMode {
         }
         from_bytes_opt(input).ok_or_else(|| {
             format!(
-                r#"mode value must be 3 octal chars, found "{}""#,
+                r#"mode value must be octal chars, found "{}""#,
                 String::from_utf8_lossy(input)
             )
             .into()
         })
+    }
+}
+
+#[test]
+fn test_mode_from_bytes() {
+    for (input, res) in vec![
+        (&b"6765"[..], FileMode {
+            setgid: true,
+            setuid: true,
+            owner: Perms::all(),
+            group: Perms::READ | Perms::WRITE,
+            other: Perms::READ | Perms::EXECUTE
+        }),
+        (&b"42"[..], FileMode {
+            setgid: false,
+            setuid: false,
+            owner: Perms::empty(),
+            group: Perms::READ,
+            other: Perms::WRITE
+        }),
+    ] {
+        assert_eq!(FileMode::from_bytes(&input[..]), Ok(res));
     }
 }
 
